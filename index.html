@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head><script id="aura-preview-performance-controller">
+(function() {
+if (window.__auraPreviewPerformanceController) return;
+const nativeRequestAnimationFrame = window.requestAnimationFrame
+? window.requestAnimationFrame.bind(window)
+: function(callback) { return window.setTimeout(function() { callback(Date.now()); }, 16); };
+const nativeCancelAnimationFrame = window.cancelAnimationFrame
+? window.cancelAnimationFrame.bind(window)
+: window.clearTimeout.bind(window);
+const nativeSetInterval = window.setInterval.bind(window);
+let paused = false;
+let nextFrameId = 1;
+const frameRecords = new Map();
+const pausedFrameCallbacks = new Map();
+const style = document.createElement('style');
+style.id = 'aura-preview-performance-style';
+style.textContent = [
+'html[data-aura-preview-paused="true"] *,',
+'html[data-aura-preview-paused="true"] *::before,',
+'html[data-aura-preview-paused="true"] *::after {',
+'  animation-play-state: paused !important;',
+'  transition-duration: 0s !important;',
+'  scroll-behavior: auto !important;',
+'}'
+].join('\n');
+document.head.appendChild(style);
+window.requestAnimationFrame = function(callback) {
+const frameId = nextFrameId++;
+if (paused) {
+pausedFrameCallbacks.set(frameId, callback);
+frameRecords.set(frameId, { paused: true });
+return frameId;
+}
+const nativeFrameId = nativeRequestAnimationFrame(function(timestamp) {
+frameRecords.delete(frameId);
+callback(timestamp);
+});
+frameRecords.set(frameId, { nativeFrameId: nativeFrameId });
+return frameId;
+};
+window.cancelAnimationFrame = function(frameId) {
+const record = frameRecords.get(frameId);
+pausedFrameCallbacks.delete(frameId);
+if (record && typeof record.nativeFrameId !== 'undefined') {
+nativeCancelAnimationFrame(record.nativeFrameId);
+}
+frameRecords.delete(frameId);
+};
+window.setInterval = function(callback, delay) {
+const args = Array.prototype.slice.call(arguments, 2);
+return nativeSetInterval(function() {
+if (paused) return;
+callback.apply(this, args);
+}, delay);
+};
+const flushPausedFrames = function() {
+const callbacks = Array.from(pausedFrameCallbacks.entries());
+pausedFrameCallbacks.clear();
+callbacks.forEach(function(entry) {
+const frameId = entry[0];
+const callback = entry[1];
+const nativeFrameId = nativeRequestAnimationFrame(function(timestamp) {
+frameRecords.delete(frameId);
+callback(timestamp);
+});
+frameRecords.set(frameId, { nativeFrameId: nativeFrameId });
+});
+};
+const setPaused = function(nextPaused) {
+const shouldPause = Boolean(nextPaused);
+if (paused === shouldPause) return;
+paused = shouldPause;
+document.documentElement.toggleAttribute('data-aura-preview-paused', paused);
+if (!paused) {
+flushPausedFrames();
+}
+};
+window.__auraPreviewPerformanceController = {
+setPaused: setPaused,
+get paused() {
+return paused;
+}
+};
+window.addEventListener('message', function(event) {
+if (event.source !== window.parent) return;
+if (!event.data || event.data.type !== 'aura-preview-performance-mode') return;
+setPaused(event.data.paused);
+});
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sundy® 作品集 | UI/UX、需求分析与 AI 设计</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@200;300;400&family=Noto+Sans+SC:wght@300;400;500&family=Noto+Serif+SC:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body {
+font-family: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+scroll-behavior: smooth;
+background-color: #030303;
+color: #F5F5F0;
+}
+h1, h2, h3, h4, h5, .serif {
+font-family: 'Playfair Display', 'Noto Serif SC', 'Songti SC', serif;
+}
+/* Cinematic Scrollbar */
+::-webkit-scrollbar {
+width: 8px;
+height: 8px;
+}
+::-webkit-scrollbar-track {
+background: #030303;
+}
+::-webkit-scrollbar-thumb {
+background: #2A2A2A;
+border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+background: #C8A97E;
+}
+/* Hide scrollbar for horizontal sliders but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+display: none;
+}
+.no-scrollbar {
+-ms-overflow-style: none;
+scrollbar-width: none;
+}
+/* Custom Selection */
+::selection {
+background-color: rgba(200, 169, 126, 0.2);
+color: #C8A97E;
+}
+/* Slow Image Zoom on Hover */
+.img-hover-zoom {
+transition: transform 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.group:hover .img-hover-zoom {
+transform: scale(1.07);
+}
+/* Glassmorphism utilities */
+.glass-panel {
+background: rgba(255, 255, 255, 0.02);
+backdrop-filter: blur(16px);
+-webkit-backdrop-filter: blur(16px);
+border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.gold-text-gradient {
+background: linear-gradient(to right, #C8A97E, #E6D5A7, #C8A97E);
+-webkit-background-clip: text;
+background-clip: text;
+color: transparent;
+}
+
+
+/* AI 设计 Slider */
+.ai-slider-viewport {
+    overflow: hidden;
+    touch-action: pan-y;
+    cursor: grab;
+}
+.ai-slider-viewport.is-dragging {
+    cursor: grabbing;
+}
+.ai-slider-track {
+    display: flex;
+    gap: 1.5rem;
+    transition: transform 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    will-change: transform;
+}
+.ai-slider-card {
+    flex: 0 0 calc((100% - 4.5rem) / 4);
+}
+.ai-slider-arrow:disabled {
+    opacity: 0.28;
+    cursor: not-allowed;
+}
+@media (max-width: 1023px) {
+    .ai-slider-card {
+        flex-basis: calc((100% - 1.5rem) / 2);
+    }
+}
+@media (max-width: 639px) {
+    .ai-slider-card {
+        flex-basis: 100%;
+    }
+}
+
+/* Opening Loader */
+#opening-loader {
+transition: opacity 0.8s ease, visibility 0.8s ease;
+}
+#opening-loader.loader-hidden {
+opacity: 0;
+visibility: hidden;
+pointer-events: none;
+}
+/* Chinese text spacing optimization */
+html[lang="zh-CN"] .tracking-\[0\.2em\] { letter-spacing: 0.12em; }
+html[lang="zh-CN"] .tracking-\[0\.3em\] { letter-spacing: 0.16em; }
+html[lang="zh-CN"] .tracking-\[0\.4em\] { letter-spacing: 0.18em; }
+
+
+/* Hero Fluid Background - INK engine adapted for Sundy® portfolio */
+.hero-fluid-bg {
+position: absolute;
+inset: 0;
+z-index: 0;
+overflow: hidden;
+background: #030303;
+}
+#c {
+position: absolute;
+inset: 0;
+width: 100%;
+height: 100%;
+display: block;
+z-index: 0;
+pointer-events: none;
+background: radial-gradient(120% 120% at 50% 38%, #17130d 0%, #070707 55%, #030303 100%);
+}
+#vig {
+position: absolute;
+inset: 0;
+z-index: 1;
+pointer-events: none;
+background: radial-gradient(135% 105% at 50% 50%, transparent 38%, rgba(3,3,3,0.86) 100%);
+mix-blend-mode: multiply;
+}
+#scrim {
+position: absolute;
+inset: 0;
+z-index: 2;
+pointer-events: none;
+background: linear-gradient(to bottom, rgba(3,3,3,0.72), rgba(3,3,3,0.38) 45%, rgba(3,3,3,0.92));
+}
+#grain {
+position: absolute;
+inset: -50%;
+z-index: 3;
+pointer-events: none;
+opacity: 0.055;
+mix-blend-mode: overlay;
+background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+animation: sundyGrain 0.6s steps(2) infinite;
+}
+@keyframes sundyGrain {
+0% { transform: translate(0,0); }
+50% { transform: translate(-6%,4%); }
+100% { transform: translate(3%,-5%); }
+}
+
+</style><!-- aura-ga4-start -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-2M6V79H761"></script>
+<script>
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-2M6V79H761');
+</script>
+<!-- aura-ga4-end -->
+</head>
+<body class="selection:bg-[#C8A97E]/20 selection:text-[#C8A97E] antialiased overflow-x-hidden">
+
+    <!-- Opening Loader -->
+    <div id="opening-loader" class="fixed inset-0 z-[100] bg-[#030303] flex items-center justify-center">
+        <div class="text-center">
+            <div class="text-4xl md:text-6xl serif uppercase tracking-tight text-white mb-4">Sundy®</div>
+            <div class="text-[10px] uppercase tracking-[0.4em] text-[#C8A97E] font-light">作品加载中</div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="fixed w-full z-50 transition-all duration-700 bg-[#030303]/80 backdrop-blur-xl border-b border-white/5 py-6" id="navbar">
+        <div class="max-w-[90rem] mx-auto px-6 lg:px-12 flex items-center justify-between">
+            <a href="#" class="text-2xl md:text-3xl font-medium tracking-tight serif uppercase text-white flex-shrink-0">
+                Sundy®
+            </a>
+            
+            <div class="hidden md:flex gap-10 text-xs uppercase tracking-[0.2em] font-light text-gray-400">
+                <a href="#uiux-design" class="hover:text-[#C8A97E] transition-colors duration-500">UI/UX 设计</a>
+                <a href="#requirements-analysis" class="hover:text-[#C8A97E] transition-colors duration-500">产品需求分析</a>
+                <a href="#ai-design" class="hover:text-[#C8A97E] transition-colors duration-500">AI 设计</a>
+                <a href="#about-me" class="hover:text-[#C8A97E] transition-colors duration-500">关于我</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="hero" class="relative h-screen flex items-center justify-center overflow-hidden">
+        <!-- Fluid Hero Background -->
+        <div class="hero-fluid-bg" aria-hidden="true">
+            <canvas id="c"></canvas>
+            <div id="vig"></div>
+            <div id="scrim"></div>
+            <div id="grain"></div>
+        </div>
+        
+        <!-- Hero Content -->
+        <div class="relative z-20 max-w-[90rem] mx-auto px-6 w-full pt-20 flex flex-col items-center text-center">
+            <div class="glass-panel p-10 md:p-16 rounded-sm max-w-4xl relative overflow-hidden group">
+                <!-- Subtle gold glow effect inside panel -->
+                <div class="absolute -inset-10 bg-[#C8A97E] opacity-0 blur-3xl group-hover:opacity-[0.03] transition-opacity duration-1000"></div>
+                
+                <span class="block text-xs uppercase tracking-[0.3em] mb-8 text-[#C8A97E] font-light">作品集 / 2026</span>
+                <h1 class="text-5xl md:text-7xl lg:text-8xl font-normal tracking-tight leading-[1.1] mb-8 text-white uppercase serif">
+                    Sundy <br>
+                    <span class="italic font-light text-gray-300 capitalize">作品集</span>
+                </h1>
+                <p class="text-sm md:text-base font-light mb-12 max-w-xl mx-auto leading-relaxed text-gray-400">
+                    需求分析师 + UI/UX 设计师，具备设计思维、用户体验与业务分析能力，正在探索 AI 赋能设计与需求交付的高效工作流。
+                </p>
+                
+                <a href="#uiux-design" class="inline-flex items-center justify-center gap-4 border border-[#C8A97E]/40 text-white px-12 py-5 text-xs uppercase tracking-[0.2em] font-light hover:bg-[#C8A97E] hover:text-black hover:border-[#C8A97E] transition-all duration-700 w-full sm:w-auto">
+                    开始探索
+                </a>
+            </div>
+        </div>
+        
+        <!-- Scroll Indicator -->
+        <div class="absolute bottom-10 left-1/2 transform -translate-x-1/2 z-20 flex flex-col items-center gap-3 opacity-50">
+            <span class="text-[10px] uppercase tracking-[0.3em] font-light">向下滑动</span>
+            <div class="w-[1px] h-12 bg-gradient-to-b from-gray-400 to-transparent"></div>
+        </div>
+    </section>
+
+    <!-- UI/UX 设计 -->
+    <section id="uiux-design" class="py-32 px-6 max-w-[90rem] mx-auto">
+        <div class="flex flex-col md:flex-row md:items-end justify-between mb-20 gap-8">
+            <div class="max-w-2xl">
+                <span class="text-xs uppercase tracking-[0.2em] text-[#C8A97E] mb-4 block font-light">精选界面作品</span>
+                <h2 class="text-4xl md:text-5xl tracking-tight text-white serif font-normal">UI/UX 设计</h2>
+            </div>
+            <a href="#" class="text-xs uppercase tracking-[0.2em] font-light text-gray-400 border-b border-gray-800 pb-2 hover:text-white hover:border-[#C8A97E] transition-all duration-500 flex items-center gap-2">
+                查看 UI/UX 案例
+                <iconify-icon icon="solar:arrow-right-linear" width="16" height="16" stroke-width="1.5"></iconify-icon>
+            </a>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-16">
+            <!-- Perfume 1 -->
+            <div class="group cursor-pointer">
+                <div class="aspect-[3/4] bg-[#0A0A0A] overflow-hidden mb-8 relative rounded-sm border border-white/5">
+                    <img src="https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?auto=format&fit=crop&q=80&w=800" alt="小程序设计" class="w-full h-full object-cover img-hover-zoom opacity-80 group-hover:opacity-100 transition-opacity duration-1000">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent opacity-60"></div>
+                    
+                    <!-- Hover Action -->
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700 bg-black/40 backdrop-blur-sm">
+                        <button class="bg-white/10 border border-white/20 text-white px-8 py-3 text-xs uppercase tracking-[0.2em] font-light hover:bg-white hover:text-black transition-colors duration-500">
+                            查看案例
+                        </button>
+                    </div>
+                </div>
+                <div class="text-center px-4">
+                    <h3 class="text-2xl mb-2 text-white serif font-medium tracking-tight group-hover:text-[#C8A97E] transition-colors duration-500">小程序设计</h3>
+                    <p class="text-xs text-gray-500 mb-4 tracking-[0.1em] font-light italic">服务流程 • 轻量场景 • 移动端交互</p>
+                    
+                </div>
+            </div>
+
+            <!-- Perfume 2 -->
+            <div class="group cursor-pointer mt-0 lg:mt-12">
+                <div class="aspect-[3/4] bg-[#0A0A0A] overflow-hidden mb-8 relative rounded-sm border border-white/5">
+                    <img src="https://images.unsplash.com/photo-1594035910387-fea47794261f?auto=format&fit=crop&q=80&w=800" alt="App 设计" class="w-full h-full object-cover img-hover-zoom opacity-80 group-hover:opacity-100 transition-opacity duration-1000 grayscale group-hover:grayscale-0">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent opacity-60"></div>
+                    
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700 bg-black/40 backdrop-blur-sm">
+                        <button class="bg-white/10 border border-white/20 text-white px-8 py-3 text-xs uppercase tracking-[0.2em] font-light hover:bg-white hover:text-black transition-colors duration-500">
+                            查看案例
+                        </button>
+                    </div>
+                </div>
+                <div class="text-center px-4">
+                    <h3 class="text-2xl mb-2 text-white serif font-medium tracking-tight group-hover:text-[#C8A97E] transition-colors duration-500">App 设计</h3>
+                    <p class="text-xs text-gray-500 mb-4 tracking-[0.1em] font-light italic">用户路径 • 视觉系统 • 体验细节</p>
+                    
+                </div>
+            </div>
+
+            <!-- Perfume 3 -->
+            <div class="group cursor-pointer">
+                <div class="aspect-[3/4] bg-[#0A0A0A] overflow-hidden mb-8 relative rounded-sm border border-white/5">
+                    <img src="https://images.unsplash.com/photo-1629198688000-71f23e745b6e?auto=format&fit=crop&q=80&w=800" alt="网页设计" class="w-full h-full object-cover img-hover-zoom opacity-80 group-hover:opacity-100 transition-opacity duration-1000">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent opacity-60"></div>
+                    
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700 bg-black/40 backdrop-blur-sm">
+                        <a href="https://sundy-studio.github.io/3D-IP-showcase/" target="_blank" rel="noopener noreferrer" class="bg-white/10 border border-white/20 text-white px-8 py-3 text-xs uppercase tracking-[0.2em] font-light hover:bg-white hover:text-black transition-colors duration-500">
+                            查看案例
+                        </a>
+                    </div>
+                </div>
+                <div class="text-center px-4">
+                    <h3 class="text-2xl mb-2 text-white serif font-medium tracking-tight group-hover:text-[#C8A97E] transition-colors duration-500">网页设计</h3>
+                    <p class="text-xs text-gray-500 mb-4 tracking-[0.1em] font-light italic">响应式页面 • 视觉布局 • 品牌表达</p>
+                    
+                </div>
+            </div>
+
+            <!-- Perfume 4 -->
+            <div class="group cursor-pointer mt-0 lg:mt-12">
+                <div class="aspect-[3/4] bg-[#0A0A0A] overflow-hidden mb-8 relative rounded-sm border border-white/5">
+                    <img src="https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?auto=format&fit=crop&q=80&w=800" alt="3D 设计" class="w-full h-full object-cover img-hover-zoom opacity-80 group-hover:opacity-100 transition-opacity duration-1000">
+                    <div class="absolute inset-0 bg-gradient-to-t from-[#030303] via-transparent to-transparent opacity-60"></div>
+                    
+                    <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-700 bg-black/40 backdrop-blur-sm">
+                        <button class="bg-white/10 border border-white/20 text-white px-8 py-3 text-xs uppercase tracking-[0.2em] font-light hover:bg-white hover:text-black transition-colors duration-500">
+                            查看案例
+                        </button>
+                    </div>
+                </div>
+                <div class="text-center px-4">
+                    <h3 class="text-2xl mb-2 text-white serif font-medium tracking-tight group-hover:text-[#C8A97E] transition-colors duration-500">3D 设计</h3>
+                    <p class="text-xs text-gray-500 mb-4 tracking-[0.1em] font-light italic">视觉探索 • 空间风格 • 品牌 IP</p>
+                    
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 产品需求分析 -->
+    <section id="requirements-analysis" class="py-32 px-6">
+        <div class="max-w-[90rem] mx-auto">
+            <div class="text-center mb-20">
+                <span class="text-xs uppercase tracking-[0.3em] text-gray-500 mb-4 block font-light">产品逻辑</span>
+                <h2 class="text-4xl md:text-5xl tracking-tight text-white serif font-normal">产品需求分析</h2>
+                <p class="mt-6 text-sm font-light text-gray-400 max-w-2xl mx-auto">将业务场景转化为清晰需求、流程结构、字段规则、验收标准与可交付文档。</p>
+            </div>
+
+            <div class="grid grid-cols-2 lg:grid-cols-3 gap-1 md:gap-4">
+                <!-- Material 1 -->
+                <div class="relative aspect-square md:aspect-[4/3] overflow-hidden group">
+                    <img src="https://images.unsplash.com/photo-1605280263929-1c42c62ef169?auto=format&fit=crop&q=80&w=800" alt="前端投保" class="w-full h-full object-cover grayscale-[80%] group-hover:grayscale-0 img-hover-zoom">
+                    <div class="absolute inset-0 bg-black/60 group-hover:bg-black/20 transition-all duration-700"></div>
+                    <div class="absolute inset-0 p-6 md:p-10 flex flex-col justify-end opacity-80 group-hover:opacity-100">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-[#C8A97E] mb-2 font-light">前端流程</span>
+                        <h3 class="text-2xl md:text-3xl text-white serif font-medium">前端投保</h3>
+                    </div>
+                </div>
+                
+                <!-- Material 2 -->
+                <div class="relative aspect-square md:aspect-[4/3] overflow-hidden group">
+                    <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/5bab247f-35d9-400d-a82b-fd87cfe913d2_1600w.webp" alt="中台系统" class="w-full h-full object-cover grayscale-[80%] group-hover:grayscale-0 img-hover-zoom">
+                    <div class="absolute inset-0 bg-black/60 group-hover:bg-black/20 transition-all duration-700"></div>
+                    <div class="absolute inset-0 p-6 md:p-10 flex flex-col justify-end opacity-80 group-hover:opacity-100">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-[#C8A97E] mb-2 font-light">业务中台</span>
+                        <h3 class="text-2xl md:text-3xl text-white serif font-medium">中台系统</h3>
+                    </div>
+                </div>
+
+                <!-- Material 3 -->
+                <div class="relative aspect-square md:aspect-[4/3] overflow-hidden group">
+                    <img src="https://images.unsplash.com/photo-1496062031456-07b8f162a322?auto=format&fit=crop&q=80&w=800" alt="核心系统" class="w-full h-full object-cover grayscale-[80%] group-hover:grayscale-0 img-hover-zoom">
+                    <div class="absolute inset-0 bg-black/60 group-hover:bg-black/20 transition-all duration-700"></div>
+                    <div class="absolute inset-0 p-6 md:p-10 flex flex-col justify-end opacity-80 group-hover:opacity-100">
+                        <span class="text-[10px] uppercase tracking-[0.2em] text-[#C8A97E] mb-2 font-light">核心业务</span>
+                        <h3 class="text-2xl md:text-3xl text-white serif font-medium">核心系统</h3>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- AI 设计 -->
+    <section id="ai-design" class="py-24 bg-[#050505] border-y border-white/5 overflow-hidden">
+        <div class="max-w-[90rem] mx-auto px-6 mb-12 flex justify-between items-end gap-8">
+            <div>
+                <h2 class="text-3xl md:text-4xl tracking-tight text-white serif font-normal">AI 设计</h2>
+                <p class="mt-4 text-sm font-light text-gray-400 max-w-xl">围绕 AI 设计实验、Agent 工作流、视觉探索与结构化交付工具，探索更高效的设计与需求分析方式。</p>
+            </div>
+            <div class="flex gap-4 flex-shrink-0">
+                <button id="ai-slider-prev" type="button" aria-label="Previous AI design item" class="ai-slider-arrow w-10 h-10 border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors rounded-full text-gray-400 hover:text-white">
+                    <iconify-icon icon="solar:arrow-left-linear" width="20" stroke-width="1.5"></iconify-icon>
+                </button>
+                <button id="ai-slider-next" type="button" aria-label="Next AI design item" class="ai-slider-arrow w-10 h-10 border border-white/10 flex items-center justify-center hover:bg-white/5 transition-colors rounded-full text-gray-400 hover:text-white">
+                    <iconify-icon icon="solar:arrow-right-linear" width="20" stroke-width="1.5"></iconify-icon>
+                </button>
+            </div>
+        </div>
+        
+        <div id="ai-slider-viewport" class="ai-slider-viewport px-6 lg:px-[calc((100vw-90rem)/2+1.5rem)] pb-12">
+            <div id="ai-slider-track" class="ai-slider-track">
+                <!-- Item 1 -->
+                <a href="https://gemini.google.com/gem/1blOb4qnRuF6fyCEirX0FPWm4AsvCT4RQ?usp=sharing" target="_blank" rel="noopener noreferrer" class="ai-slider-card group cursor-pointer block">
+                    <div class="bg-[#0A0A0A] p-8 aspect-square flex flex-col justify-center items-center border border-white/5 hover:border-[#C8A97E]/30 transition-colors duration-500 relative overflow-hidden">
+                        <img src="https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&q=80&w=400" alt="UI还原agent" class="w-3/4 h-3/4 object-contain img-hover-zoom opacity-80 group-hover:opacity-100">
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg text-white serif font-medium tracking-tight">UI还原agent</h4>
+                        <p class="text-xs text-gray-500 mt-1 font-light">截图解析 • 像素级还原 • 前端代码</p>
+                    </div>
+                </a>
+                
+                <!-- Item 2 -->
+                <article class="ai-slider-card group cursor-pointer">
+                    <div class="bg-[#0A0A0A] p-8 aspect-square flex flex-col justify-center items-center border border-white/5 hover:border-[#C8A97E]/30 transition-colors duration-500 relative overflow-hidden">
+                        <img src="https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?auto=format&fit=crop&q=80&w=400" alt="文档编写agent" class="w-3/4 h-3/4 object-contain img-hover-zoom opacity-80 group-hover:opacity-100 grayscale group-hover:grayscale-0">
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg text-white serif font-medium tracking-tight">文档编写agent</h4>
+                        <p class="text-xs text-gray-500 mt-1 font-light">需求拆解 • PRD 输出 • 结构化文档</p>
+                    </div>
+                </article>
+
+                <!-- Item 3 -->
+                <a href="https://ai.studio/apps/1a686fef-9897-451e-a96f-5888bf476e24?fullscreenApplet=true" target="_blank" rel="noopener noreferrer" class="ai-slider-card group cursor-pointer block">
+                    <div class="bg-[#0A0A0A] p-8 aspect-square flex flex-col justify-center items-center border border-white/5 hover:border-[#C8A97E]/30 transition-colors duration-500 relative overflow-hidden">
+                        <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/c543a9e1-f226-4ced-80b0-feb8445a75b9_1600w.jpg" alt="提示词生成agent" class="w-3/4 h-3/4 object-contain img-hover-zoom opacity-80 group-hover:opacity-100">
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg text-white serif font-medium tracking-tight">提示词生成agent</h4>
+                        <p class="text-xs text-gray-500 mt-1 font-light">场景描述 • 规则约束 • 稳定生成</p>
+                    </div>
+                </a>
+                
+                <!-- Item 4 -->
+                <article class="ai-slider-card group cursor-pointer">
+                    <div class="bg-[#0A0A0A] p-8 aspect-square flex flex-col justify-center items-center border border-white/5 hover:border-[#C8A97E]/30 transition-colors duration-500 relative overflow-hidden">
+                        <img src="https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&q=80&w=400" alt="交互演示agent" class="w-3/4 h-3/4 object-contain img-hover-zoom opacity-80 group-hover:opacity-100 grayscale group-hover:grayscale-0">
+                        <div class="absolute inset-0 bg-gradient-to-t from-[#030303]/50 via-transparent to-transparent opacity-40"></div>
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg text-white serif font-medium tracking-tight">交互演示agent</h4>
+                        <p class="text-xs text-gray-500 mt-1 font-light">页面逻辑 • 点击反馈 • 原型演示</p>
+                    </div>
+                </article>
+
+                <!-- Item 5 -->
+                <article class="ai-slider-card group cursor-pointer">
+                    <div class="bg-[#0A0A0A] p-8 aspect-square flex flex-col justify-center items-center border border-white/5 hover:border-[#C8A97E]/30 transition-colors duration-500 relative overflow-hidden">
+                        <div class="absolute inset-0 bg-[#C8A97E]/5 flex flex-col items-center justify-center p-10 text-center">
+                            <iconify-icon icon="solar:box-minimalistic-linear" width="32" class="text-[#C8A97E] mb-4" stroke-width="1"></iconify-icon>
+                            <span class="text-sm uppercase tracking-[0.2em] font-light">探索更多</span>
+                        </div>
+                    </div>
+                    <div class="mt-6">
+                        <h4 class="text-lg text-white serif font-medium tracking-tight">探索更多</h4>
+                        <p class="text-xs text-gray-500 mt-1 font-light">更多 AI 案例 • 敬请期待</p>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <!-- 关于我 -->
+    <section id="about-me" class="py-32 relative overflow-hidden border-y border-white/5 bg-[#050505]">
+        <!-- Decorative subtle background elements -->
+        <div class="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-[#C8A97E]/20 to-transparent"></div>
+        <div class="absolute -left-64 top-1/2 transform -translate-y-1/2 w-96 h-96 bg-[#C8A97E]/5 rounded-full blur-[100px] pointer-events-none"></div>
+
+        <div class="max-w-[90rem] mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-16 lg:gap-32 items-center relative z-10">
+            <div class="order-2 md:order-1 relative group">
+                <div class="aspect-[4/5] overflow-hidden rounded-sm relative z-10 border border-white/10">
+                    <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/917d6f93-fb36-439a-8c48-884b67b35381_1600w.jpg" alt="About Sundy" class="w-full h-full object-cover img-hover-zoom grayscale group-hover:grayscale-[50%] transition-all duration-1000">
+                </div>
+                <!-- Offset decorative image behind -->
+                <div class="absolute -bottom-10 -right-10 w-2/3 aspect-square overflow-hidden rounded-sm border border-white/5 z-0 hidden lg:block opacity-40">
+                    <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/4734259a-bad7-422f-981e-ce01e79184f2_1600w.jpg" alt="Design and Requirement Experience" class="w-full h-full object-cover grayscale">
+                </div>
+            </div>
+            
+            <div class="order-1 md:order-2 flex flex-col justify-center">
+                <span class="text-xs uppercase tracking-[0.4em] text-[#C8A97E] mb-8 font-light flex items-center gap-4">
+                    <span class="w-12 h-[1px] bg-[#C8A97E]/50"></span>
+                    UI/UX + 需求分析师
+                </span>
+                <h2 class="text-4xl md:text-5xl lg:text-6xl tracking-tight text-white mb-10 leading-[1.1] serif font-normal">
+                    工作经历 <br> <span class="italic text-gray-400 font-light">从视觉设计到业务分析。</span>
+                </h2>
+                <div class="space-y-6 text-sm lg:text-base font-light leading-relaxed text-gray-400 mb-12">
+                    <p>
+                        2018–2021｜在百度担任视觉设计师，参与数字产品与品牌传播相关视觉设计工作，逐步建立了对视觉层级、版式结构、品牌表达与细节交付的基础能力。
+                    </p>
+                    <p>
+                        2021–2026｜在保险行业担任 UI 设计师与需求分析师，聚焦核心业务系统、中台服务、资金相关流程与前端投保场景，将复杂业务逻辑转化为清晰界面、结构化文档与可协同交付材料。
+                    </p>
+                </div>
+                
+                <div>
+                    <img src="https://hoirqrkdgbmvpwutwuwj.supabase.co/storage/v1/object/public/assets/assets/c543a9e1-f226-4ced-80b0-feb8445a75b9_1600w.jpg" alt="Sundy 作品集签名" class="h-12 invert opacity-50 mb-4" style="filter: invert(1) sepia(1) saturate(0) hue-rotate(0deg) brightness(0.8);">
+                    <p class="text-xs uppercase tracking-[0.2em] font-light text-gray-500">Sundy® 作品集</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Luxury Testimonials - Hidden Temporarily -->
+    <section class="hidden py-32 px-6 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] relative">
+        <div class="absolute inset-0 bg-gradient-to-b from-[#030303] via-[#050505]/95 to-[#030303]"></div>
+        
+        <div class="max-w-[90rem] mx-auto relative z-10">
+            <div class="text-center mb-20">
+                <iconify-icon icon="solar:quote-right-bold" width="32" class="text-[#C8A97E]/30 mb-6"></iconify-icon>
+                <h2 class="text-xs uppercase tracking-[0.3em] text-gray-500 font-light">专业评价</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-12 lg:gap-20">
+                <div class="flex flex-col gap-6 text-center md:text-left">
+                    <div class="flex gap-1 justify-center md:justify-start text-[#C8A97E]">
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                    </div>
+                    <p class="text-lg lg:text-xl serif italic text-gray-300 leading-relaxed font-light">“AI Agent 设计兼具结构深度与可执行性，适合用于复杂任务拆解和稳定输出。”</p>
+                    <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600 border-t border-white/10 pt-4 inline-block w-max mx-auto md:mx-0">— 项目反馈 A</span>
+                </div>
+                
+                <div class="flex flex-col gap-6 text-center md:text-left">
+                    <div class="flex gap-1 justify-center md:justify-start text-[#C8A97E]">
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                    </div>
+                    <p class="text-lg lg:text-xl serif italic text-gray-300 leading-relaxed font-light">“UI/UX 设计不仅关注视觉呈现，也能兼顾业务流程、用户路径和实际交付场景。”</p>
+                    <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600 border-t border-white/10 pt-4 inline-block w-max mx-auto md:mx-0">— 项目反馈 B</span>
+                </div>
+                
+                <div class="flex flex-col gap-6 text-center md:text-left">
+                    <div class="flex gap-1 justify-center md:justify-start text-[#C8A97E]">
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                        <iconify-icon icon="solar:star-bold" width="12"></iconify-icon>
+                    </div>
+                    <p class="text-lg lg:text-xl serif italic text-gray-300 leading-relaxed font-light">“Sundy® 的作品集体现了从设计执行到需求分析的复合型能力。”</p>
+                    <span class="text-[10px] uppercase tracking-[0.2em] text-gray-600 border-t border-white/10 pt-4 inline-block w-max mx-auto md:mx-0">— 项目反馈 C</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 联系我 -->
+    <section id="contact" class="py-32 px-6 bg-[#080808]">
+        <div class="max-w-4xl mx-auto glass-panel p-10 md:p-20 text-center border border-white/5 relative overflow-hidden rounded-sm">
+            <!-- Background Glow -->
+            <div class="absolute inset-0 bg-gradient-to-br from-[#C8A97E]/5 to-transparent"></div>
+            
+            <div class="relative z-10">
+                <iconify-icon icon="solar:letter-linear" width="40" class="text-[#C8A97E] mb-6" stroke-width="1"></iconify-icon>
+                <h2 class="text-3xl md:text-5xl tracking-tight mb-6 serif font-normal text-white">联系我</h2>
+                <p class="text-sm font-light text-gray-400 mb-12 max-w-md mx-auto leading-relaxed">
+                    如果你想了解我的作品、讨论设计需求、保险业务系统、产品需求分析或 AI 工作流，可以在下方填写你的咨询内容，并通过邮件发送给我。
+                </p>
+                
+                <form action="mailto:sun.ludan1115@gmail.com" method="POST" enctype="text/plain" class="flex flex-col gap-6 max-w-xl mx-auto text-left">
+                    <input type="text" name="name" placeholder="你的姓名或公司" class="bg-transparent border-b border-white/20 py-4 px-4 focus:border-[#C8A97E] outline-none transition-colors font-light text-sm placeholder-gray-600 text-white rounded-none">
+                    <input type="email" name="email" placeholder="你的邮箱地址" class="bg-transparent border-b border-white/20 py-4 px-4 focus:border-[#C8A97E] outline-none transition-colors font-light text-sm placeholder-gray-600 text-white rounded-none">
+                    <textarea name="message" rows="5" placeholder="告诉我你想咨询或合作的内容..." class="bg-transparent border border-white/20 py-4 px-4 focus:border-[#C8A97E] outline-none transition-colors font-light text-sm placeholder-gray-600 text-white rounded-sm resize-none"></textarea>
+                    <button type="submit" class="bg-white text-black px-10 py-4 text-[10px] uppercase tracking-[0.2em] font-medium hover:bg-[#C8A97E] transition-colors duration-500">发送</button>
+                </form>
+                <p class="text-[9px] uppercase tracking-widest text-gray-600 mt-6">可合作方向：UI/UX 设计、需求分析与 AI 工作流探索。</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-[#020202] pt-32 pb-12 px-6 border-t border-white/5">
+        <div class="max-w-[90rem] mx-auto">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-16 lg:gap-8 mb-24">
+                
+                <div class="md:col-span-4 lg:col-span-5">
+                    <a href="#" class="text-3xl tracking-tight text-white mb-8 block serif uppercase font-medium">
+                        Sundy®
+                    </a>
+                    <p class="text-xs font-light leading-relaxed text-gray-500 max-w-xs">
+                        个人作品集，聚焦 UI/UX 设计、产品需求分析、保险系统业务理解与 AI 赋能工作流探索。
+                    </p>
+                </div>
+                
+                <div class="md:col-span-3 lg:col-span-2">
+                    <h5 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-8">作品集</h5>
+                    <ul class="flex flex-col gap-5 text-xs font-light text-gray-500">
+                        <li><a href="#uiux-design" class="hover:text-[#C8A97E] transition-colors">UI/UX 设计</a></li>
+                        <li><a href="#requirements-analysis" class="hover:text-[#C8A97E] transition-colors">产品需求分析</a></li>
+                        <li><a href="#ai-design" class="hover:text-[#C8A97E] transition-colors">AI 设计</a></li>
+                        <li><a href="#about-me" class="hover:text-[#C8A97E] transition-colors">关于我</a></li>
+                    </ul>
+                </div>
+
+                <div class="md:col-span-3 lg:col-span-2">
+                    <h5 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-8">关注方向</h5>
+                    <ul class="flex flex-col gap-5 text-xs font-light text-gray-500">
+                        <li><a href="#" class="hover:text-[#C8A97E] transition-colors">小程序设计</a></li>
+                        <li><a href="#" class="hover:text-[#C8A97E] transition-colors">App 设计</a></li>
+                        <li><a href="#" class="hover:text-[#C8A97E] transition-colors">网页设计</a></li>
+                        <li><a href="#" class="hover:text-[#C8A97E] transition-colors">保险 PRD</a></li>
+                    </ul>
+                </div>
+
+                <div class="md:col-span-2 lg:col-span-3">
+                    <h5 class="text-[10px] uppercase tracking-[0.2em] font-medium text-white mb-8">联系我</h5>
+                    <div class="flex gap-6 text-gray-500">
+                        <a href="#" class="hover:text-[#C8A97E] transition-colors"><iconify-icon icon="solar:camera-linear" width="22" stroke-width="1.5"></iconify-icon></a>
+                        <a href="#" class="hover:text-[#C8A97E] transition-colors"><iconify-icon icon="solar:letter-linear" width="22" stroke-width="1.5"></iconify-icon></a>
+                        <a href="#" class="hover:text-[#C8A97E] transition-colors"><iconify-icon icon="solar:map-point-linear" width="22" stroke-width="1.5"></iconify-icon></a>
+                    </div>
+                    <div class="mt-10">
+                        <p class="text-[10px] uppercase tracking-[0.2em] font-light text-gray-600 mb-2">保险需求分析 / 项目沟通</p>
+                        <a href="mailto:sun.ludan1115@gmail.com" class="text-sm font-light text-gray-400 hover:text-white transition-colors border-b border-transparent hover:border-white pb-1">sun.ludan1115@gmail.com</a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
+                <p class="text-[9px] uppercase tracking-[0.2em] text-gray-600 font-light">&copy; 2026 Sundy®。保留所有权利。</p>
+                <div class="flex gap-8 text-[9px] uppercase tracking-[0.2em] text-gray-600 font-light">
+                    <a href="#" class="hover:text-white transition-colors">隐私政策</a>
+                    <a href="#" class="hover:text-white transition-colors">使用条款</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- =========================================================
+         INK FLUID ENGINE — stable-fluids GPU solver with
+         scroll-driven config + palette lerping.
+         Physics after Jos Stam; WebGL after Pavel Dobryakov.
+         ========================================================= -->
+    <script>
+    "use strict";
+    (function () {
+      const canvas = document.getElementById('c');
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    
+      const config = {
+        SIM_RESOLUTION:192, DYE_RESOLUTION:1024,
+        DENSITY_DISSIPATION:0.82, VELOCITY_DISSIPATION:0.962,
+        PRESSURE:0.8, PRESSURE_ITERATIONS:22, CURL:11,
+        SPLAT_RADIUS:0.20, SPLAT_FORCE:2600,
+        SHADING:true, BLOOM:true, BLOOM_ITERATIONS:8, BLOOM_RESOLUTION:256,
+        BLOOM_INTENSITY:0.58, BLOOM_THRESHOLD:0.58, BLOOM_SOFT_KNEE:0.7,
+        COLOR_UPDATE_SPEED:3.8, AUTO_PAINT:true, PAUSED:false,
+      };
+      if (reduceMotion){ config.PRESSURE_ITERATIONS=18; config.SIM_RESOLUTION=160; config.DYE_RESOLUTION=768; }
+    
+      const { gl, ext } = getWebGLContext(canvas);
+      if (!gl){ drawFallback(); return; }
+      if (!ext.supportLinearFiltering){ config.DYE_RESOLUTION=512; config.SHADING=false; config.BLOOM=false; }
+    
+      function getWebGLContext(canvas){
+        const params={alpha:true,depth:false,stencil:false,antialias:false,preserveDrawingBuffer:false,premultipliedAlpha:false};
+        let gl=canvas.getContext('webgl2',params); const isWebGL2=!!gl;
+        if(!isWebGL2) gl=canvas.getContext('webgl',params)||canvas.getContext('experimental-webgl',params);
+        if(!gl) return {gl:null,ext:null};
+        let halfFloat,supportLinearFiltering;
+        if(isWebGL2){ gl.getExtension('EXT_color_buffer_float'); supportLinearFiltering=!!gl.getExtension('OES_texture_float_linear'); }
+        else { halfFloat=gl.getExtension('OES_texture_half_float'); supportLinearFiltering=!!gl.getExtension('OES_texture_half_float_linear'); }
+        gl.clearColor(0.02,0.024,0.04,1.0);
+        const halfFloatTexType=isWebGL2?gl.HALF_FLOAT:(halfFloat?halfFloat.HALF_FLOAT_OES:null);
+        let formatRGBA,formatRG,formatR;
+        if(isWebGL2){ formatRGBA=getSupportedFormat(gl,gl.RGBA16F,gl.RGBA,halfFloatTexType); formatRG=getSupportedFormat(gl,gl.RG16F,gl.RG,halfFloatTexType); formatR=getSupportedFormat(gl,gl.R16F,gl.RED,halfFloatTexType); }
+        else { formatRGBA=getSupportedFormat(gl,gl.RGBA,gl.RGBA,halfFloatTexType); formatRG=getSupportedFormat(gl,gl.RGBA,gl.RGBA,halfFloatTexType); formatR=getSupportedFormat(gl,gl.RGBA,gl.RGBA,halfFloatTexType); }
+        return {gl,ext:{isWebGL2,formatRGBA,formatRG,formatR,halfFloatTexType,supportLinearFiltering}};
+      }
+      function getSupportedFormat(gl,internalFormat,format,type){
+        if(!supportRenderTextureFormat(gl,internalFormat,format,type)){ switch(internalFormat){ case gl.R16F: return getSupportedFormat(gl,gl.RG16F,gl.RG,type); case gl.RG16F: return getSupportedFormat(gl,gl.RGBA16F,gl.RGBA,type); default: return null; } }
+        return {internalFormat,format};
+      }
+      function supportRenderTextureFormat(gl,internalFormat,format,type){
+        const texture=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,texture);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+        gl.texImage2D(gl.TEXTURE_2D,0,internalFormat,4,4,0,format,type,null);
+        const fbo=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0);
+        const status=gl.checkFramebufferStatus(gl.FRAMEBUFFER); gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+        return status===gl.FRAMEBUFFER_COMPLETE;
+      }
+      function compileShader(type,source,keywords){ source=addKeywords(source,keywords); const s=gl.createShader(type); gl.shaderSource(s,source); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.warn(gl.getShaderInfoLog(s)); return s; }
+      function addKeywords(source,keywords){ if(!keywords) return source; let p=''; keywords.forEach(k=>p+='#define '+k+'\n'); return p+source; }
+      function createProgram(vs,fs){ const p=gl.createProgram(); gl.attachShader(p,vs); gl.attachShader(p,fs); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.warn(gl.getProgramInfoLog(p)); return p; }
+      function getUniforms(program){ const u={}; const c=gl.getProgramParameter(program,gl.ACTIVE_UNIFORMS); for(let i=0;i<c;i++){ const n=gl.getActiveUniform(program,i).name; u[n]=gl.getUniformLocation(program,n); } return u; }
+      class Program{ constructor(vs,fs){ this.program=createProgram(vs,fs); this.uniforms=getUniforms(this.program); } bind(){ gl.useProgram(this.program); } }
+      class Material{ constructor(vs,src){ this.vertexShader=vs; this.fragmentShaderSource=src; this.programs={}; this.activeProgram=null; this.uniforms={}; }
+        setKeywords(kw){ let h=0; for(let i=0;i<kw.length;i++) h+=hashCode(kw[i]); let p=this.programs[h]; if(p==null){ const fs=compileShader(gl.FRAGMENT_SHADER,this.fragmentShaderSource,kw); p=createProgram(this.vertexShader,fs); this.programs[h]=p; } if(p===this.activeProgram) return; this.uniforms=getUniforms(p); this.activeProgram=p; }
+        bind(){ gl.useProgram(this.activeProgram); } }
+      function hashCode(s){ if(s.length===0) return 0; let h=0; for(let i=0;i<s.length;i++){ h=(h<<5)-h+s.charCodeAt(i); h|=0; } return h; }
+    
+      const baseVertexShader=compileShader(gl.VERTEX_SHADER,`precision highp float; attribute vec2 aPosition; varying vec2 vUv; varying vec2 vL; varying vec2 vR; varying vec2 vT; varying vec2 vB; uniform vec2 texelSize; void main(){ vUv=aPosition*0.5+0.5; vL=vUv-vec2(texelSize.x,0.0); vR=vUv+vec2(texelSize.x,0.0); vT=vUv+vec2(0.0,texelSize.y); vB=vUv-vec2(0.0,texelSize.y); gl_Position=vec4(aPosition,0.0,1.0); }`);
+      const copyShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying highp vec2 vUv; uniform sampler2D uTexture; void main(){ gl_FragColor=texture2D(uTexture,vUv); }`);
+      const clearShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying highp vec2 vUv; uniform sampler2D uTexture; uniform float value; void main(){ gl_FragColor=value*texture2D(uTexture,vUv); }`);
+      const displayShaderSource=`precision highp float; precision highp sampler2D; varying vec2 vUv; varying vec2 vL; varying vec2 vR; varying vec2 vT; varying vec2 vB; uniform sampler2D uTexture; uniform sampler2D uBloom; uniform vec2 texelSize; vec3 linearToGamma(vec3 c){ c=max(c,vec3(0.0)); return max(1.055*pow(c,vec3(0.416666667))-0.055,vec3(0.0)); } void main(){ vec3 c=texture2D(uTexture,vUv).rgb;
+        #ifdef SHADING
+          vec3 lc=texture2D(uTexture,vL).rgb; vec3 rc=texture2D(uTexture,vR).rgb; vec3 tc=texture2D(uTexture,vT).rgb; vec3 bc=texture2D(uTexture,vB).rgb;
+          float dx=length(rc)-length(lc); float dy=length(tc)-length(bc); vec3 n=normalize(vec3(dx,dy,length(texelSize))); vec3 l=vec3(0.0,0.0,1.0); float diffuse=clamp(dot(n,l)+0.7,0.7,1.0); c*=diffuse;
+        #endif
+        #ifdef BLOOM
+          vec3 bloom=texture2D(uBloom,vUv).rgb; bloom=linearToGamma(bloom); c+=bloom;
+        #endif
+          c=max(c,vec3(0.0)); float lum=max(c.r,max(c.g,c.b)); if(lum>0.0001){ float mapped=lum/(1.0+0.55*max(lum-0.85,0.0)); mapped=min(mapped,0.97); c*=mapped/lum; } float a=max(c.r,max(c.g,c.b)); gl_FragColor=vec4(c,a); }`;
+      const splatShader=compileShader(gl.FRAGMENT_SHADER,`precision highp float; precision highp sampler2D; varying vec2 vUv; uniform sampler2D uTarget; uniform float aspectRatio; uniform vec3 color; uniform vec2 point; uniform float radius; void main(){ vec2 p=vUv-point.xy; p.x*=aspectRatio; vec3 splat=exp(-dot(p,p)/radius)*color; vec3 base=texture2D(uTarget,vUv).xyz; gl_FragColor=vec4(base+splat,1.0); }`);
+      const advectionShader=compileShader(gl.FRAGMENT_SHADER,`precision highp float; precision highp sampler2D; varying vec2 vUv; uniform sampler2D uVelocity; uniform sampler2D uSource; uniform vec2 texelSize; uniform vec2 dyeTexelSize; uniform float dt; uniform float dissipation; vec4 bilerp(sampler2D sam,vec2 uv,vec2 tsize){ vec2 st=uv/tsize-0.5; vec2 iuv=floor(st); vec2 fuv=fract(st); vec4 a=texture2D(sam,(iuv+vec2(0.5,0.5))*tsize); vec4 b=texture2D(sam,(iuv+vec2(1.5,0.5))*tsize); vec4 c=texture2D(sam,(iuv+vec2(0.5,1.5))*tsize); vec4 d=texture2D(sam,(iuv+vec2(1.5,1.5))*tsize); return mix(mix(a,b,fuv.x),mix(c,d,fuv.x),fuv.y); } void main(){
+        #ifdef MANUAL_FILTERING
+          vec2 coord=vUv-dt*bilerp(uVelocity,vUv,texelSize).xy*texelSize; vec4 result=bilerp(uSource,coord,dyeTexelSize);
+        #else
+          vec2 coord=vUv-dt*texture2D(uVelocity,vUv).xy*texelSize; vec4 result=texture2D(uSource,coord);
+        #endif
+          float decay=1.0+dissipation*dt; gl_FragColor=result/decay; }`, ext.supportLinearFiltering?null:['MANUAL_FILTERING']);
+      const divergenceShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying highp vec2 vUv; varying highp vec2 vL; varying highp vec2 vR; varying highp vec2 vT; varying highp vec2 vB; uniform sampler2D uVelocity; void main(){ float L=texture2D(uVelocity,vL).x; float R=texture2D(uVelocity,vR).x; float T=texture2D(uVelocity,vT).y; float B=texture2D(uVelocity,vB).y; vec2 C=texture2D(uVelocity,vUv).xy; if(vL.x<0.0){L=-C.x;} if(vR.x>1.0){R=-C.x;} if(vT.y>1.0){T=-C.y;} if(vB.y<0.0){B=-C.y;} float div=0.5*(R-L+T-B); gl_FragColor=vec4(div,0.0,0.0,1.0); }`);
+      const curlShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying highp vec2 vUv; varying highp vec2 vL; varying highp vec2 vR; varying highp vec2 vT; varying highp vec2 vB; uniform sampler2D uVelocity; void main(){ float L=texture2D(uVelocity,vL).y; float R=texture2D(uVelocity,vR).y; float T=texture2D(uVelocity,vT).x; float B=texture2D(uVelocity,vB).x; float vorticity=R-L-T+B; gl_FragColor=vec4(0.5*vorticity,0.0,0.0,1.0); }`);
+      const vorticityShader=compileShader(gl.FRAGMENT_SHADER,`precision highp float; precision highp sampler2D; varying vec2 vUv; varying vec2 vL; varying vec2 vR; varying vec2 vT; varying vec2 vB; uniform sampler2D uVelocity; uniform sampler2D uCurl; uniform float curl; uniform float dt; void main(){ float L=texture2D(uCurl,vL).x; float R=texture2D(uCurl,vR).x; float T=texture2D(uCurl,vT).x; float B=texture2D(uCurl,vB).x; float C=texture2D(uCurl,vUv).x; vec2 force=0.5*vec2(abs(T)-abs(B),abs(R)-abs(L)); force/=length(force)+0.0001; force*=curl*C; force.y*=-1.0; vec2 velocity=texture2D(uVelocity,vUv).xy; velocity+=force*dt; velocity=min(max(velocity,-1000.0),1000.0); gl_FragColor=vec4(velocity,0.0,1.0); }`);
+      const pressureShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying highp vec2 vUv; varying highp vec2 vL; varying highp vec2 vR; varying highp vec2 vT; varying highp vec2 vB; uniform sampler2D uPressure; uniform sampler2D uDivergence; void main(){ float L=texture2D(uPressure,vL).x; float R=texture2D(uPressure,vR).x; float T=texture2D(uPressure,vT).x; float B=texture2D(uPressure,vB).x; float divergence=texture2D(uDivergence,vUv).x; float pressure=(L+R+B+T-divergence)*0.25; gl_FragColor=vec4(pressure,0.0,0.0,1.0); }`);
+      const gradientSubtractShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying highp vec2 vUv; varying highp vec2 vL; varying highp vec2 vR; varying highp vec2 vT; varying highp vec2 vB; uniform sampler2D uPressure; uniform sampler2D uVelocity; void main(){ float L=texture2D(uPressure,vL).x; float R=texture2D(uPressure,vR).x; float T=texture2D(uPressure,vT).x; float B=texture2D(uPressure,vB).x; vec2 velocity=texture2D(uVelocity,vUv).xy; velocity.xy-=vec2(R-L,T-B); gl_FragColor=vec4(velocity,0.0,1.0); }`);
+      const bloomPrefilterShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying vec2 vUv; uniform sampler2D uTexture; uniform vec3 curve; uniform float threshold; void main(){ vec3 c=texture2D(uTexture,vUv).rgb; float br=max(c.r,max(c.g,c.b)); float rq=clamp(br-curve.x,0.0,curve.y); rq=curve.z*rq*rq; c*=max(rq,br-threshold)/max(br,0.0001); gl_FragColor=vec4(c,0.0); }`);
+      const bloomBlurShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying vec2 vL; varying vec2 vR; varying vec2 vT; varying vec2 vB; uniform sampler2D uTexture; void main(){ vec4 sum=vec4(0.0); sum+=texture2D(uTexture,vL); sum+=texture2D(uTexture,vR); sum+=texture2D(uTexture,vT); sum+=texture2D(uTexture,vB); sum*=0.25; gl_FragColor=sum; }`);
+      const bloomFinalShader=compileShader(gl.FRAGMENT_SHADER,`precision mediump float; precision mediump sampler2D; varying vec2 vL; varying vec2 vR; varying vec2 vT; varying vec2 vB; uniform sampler2D uTexture; uniform float intensity; void main(){ vec4 sum=vec4(0.0); sum+=texture2D(uTexture,vL); sum+=texture2D(uTexture,vR); sum+=texture2D(uTexture,vT); sum+=texture2D(uTexture,vB); sum*=0.25; gl_FragColor=sum*intensity; }`);
+    
+      const blit=(()=>{ gl.bindBuffer(gl.ARRAY_BUFFER,gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,-1,1,1,1,1,-1]),gl.STATIC_DRAW); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,new Uint16Array([0,1,2,0,2,3]),gl.STATIC_DRAW); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0); gl.enableVertexAttribArray(0); return (target,clear=false)=>{ if(target==null){ gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight); gl.bindFramebuffer(gl.FRAMEBUFFER,null);} else { gl.viewport(0,0,target.width,target.height); gl.bindFramebuffer(gl.FRAMEBUFFER,target.fbo);} if(clear){ gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT);} gl.drawElements(gl.TRIANGLES,6,gl.UNSIGNED_SHORT,0); }; })();
+    
+      function createFBO(w,h,internalFormat,format,type,param){ gl.activeTexture(gl.TEXTURE0); const texture=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,texture); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,param); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,param); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE); gl.texImage2D(gl.TEXTURE_2D,0,internalFormat,w,h,0,format,type,null); const fbo=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,fbo); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,texture,0); gl.viewport(0,0,w,h); gl.clear(gl.COLOR_BUFFER_BIT); const texelSizeX=1.0/w,texelSizeY=1.0/h; return {texture,fbo,width:w,height:h,texelSizeX,texelSizeY,attach(id){ gl.activeTexture(gl.TEXTURE0+id); gl.bindTexture(gl.TEXTURE_2D,texture); return id; }}; }
+      function createDoubleFBO(w,h,iF,f,t,p){ let a=createFBO(w,h,iF,f,t,p); let b=createFBO(w,h,iF,f,t,p); return {width:w,height:h,texelSizeX:a.texelSizeX,texelSizeY:a.texelSizeY,get read(){return a;},set read(v){a=v;},get write(){return b;},set write(v){b=v;},swap(){const t=a;a=b;b=t;}}; }
+      function resizeFBO(target,w,h,iF,f,t,p){ const n=createFBO(w,h,iF,f,t,p); copyProgram.bind(); gl.uniform1i(copyProgram.uniforms.uTexture,target.attach(0)); blit(n); return n; }
+      function resizeDoubleFBO(target,w,h,iF,f,t,p){ if(target.width===w&&target.height===h) return target; target.read=resizeFBO(target.read,w,h,iF,f,t,p); target.write=createFBO(w,h,iF,f,t,p); target.width=w; target.height=h; target.texelSizeX=1.0/w; target.texelSizeY=1.0/h; return target; }
+    
+      const copyProgram=new Program(baseVertexShader,copyShader);
+      const clearProgram=new Program(baseVertexShader,clearShader);
+      const splatProgram=new Program(baseVertexShader,splatShader);
+      const advectionProgram=new Program(baseVertexShader,advectionShader);
+      const divergenceProgram=new Program(baseVertexShader,divergenceShader);
+      const curlProgram=new Program(baseVertexShader,curlShader);
+      const vorticityProgram=new Program(baseVertexShader,vorticityShader);
+      const pressureProgram=new Program(baseVertexShader,pressureShader);
+      const gradienSubtractProgram=new Program(baseVertexShader,gradientSubtractShader);
+      const bloomPrefilterProgram=new Program(baseVertexShader,bloomPrefilterShader);
+      const bloomBlurProgram=new Program(baseVertexShader,bloomBlurShader);
+      const bloomFinalProgram=new Program(baseVertexShader,bloomFinalShader);
+      const displayMaterial=new Material(baseVertexShader,displayShaderSource);
+    
+      let dye,velocity,divergence,curl,pressure; let bloom; let bloomFramebuffers=[];
+      function getResolution(r){ let ar=gl.drawingBufferWidth/gl.drawingBufferHeight; if(ar<1) ar=1.0/ar; const min=Math.round(r); const max=Math.round(r*ar); if(gl.drawingBufferWidth>gl.drawingBufferHeight) return {width:max,height:min}; return {width:min,height:max}; }
+      function initFramebuffers(){ const simRes=getResolution(config.SIM_RESOLUTION); const dyeRes=getResolution(config.DYE_RESOLUTION); const texType=ext.halfFloatTexType; const rgba=ext.formatRGBA,rg=ext.formatRG,r=ext.formatR; const filtering=ext.supportLinearFiltering?gl.LINEAR:gl.NEAREST; gl.disable(gl.BLEND);
+        if(!dye) dye=createDoubleFBO(dyeRes.width,dyeRes.height,rgba.internalFormat,rgba.format,texType,filtering); else dye=resizeDoubleFBO(dye,dyeRes.width,dyeRes.height,rgba.internalFormat,rgba.format,texType,filtering);
+        if(!velocity) velocity=createDoubleFBO(simRes.width,simRes.height,rg.internalFormat,rg.format,texType,filtering); else velocity=resizeDoubleFBO(velocity,simRes.width,simRes.height,rg.internalFormat,rg.format,texType,filtering);
+        divergence=createFBO(simRes.width,simRes.height,r.internalFormat,r.format,texType,gl.NEAREST);
+        curl=createFBO(simRes.width,simRes.height,r.internalFormat,r.format,texType,gl.NEAREST);
+        pressure=createDoubleFBO(simRes.width,simRes.height,r.internalFormat,r.format,texType,gl.NEAREST);
+        initBloomFramebuffers();
+      }
+      function initBloomFramebuffers(){ if(!config.BLOOM) return; const res=getResolution(config.BLOOM_RESOLUTION); const texType=ext.halfFloatTexType; const rgba=ext.formatRGBA; const filtering=ext.supportLinearFiltering?gl.LINEAR:gl.NEAREST; bloom=createFBO(res.width,res.height,rgba.internalFormat,rgba.format,texType,filtering); bloomFramebuffers.length=0; for(let i=0;i<config.BLOOM_ITERATIONS;i++){ const w=res.width>>(i+1); const h=res.height>>(i+1); if(w<2||h<2) break; bloomFramebuffers.push(createFBO(w,h,rgba.internalFormat,rgba.format,texType,filtering)); } }
+      function updateKeywords(){ const kw=[]; if(config.SHADING) kw.push('SHADING'); if(config.BLOOM) kw.push('BLOOM'); displayMaterial.setKeywords(kw); }
+      updateKeywords(); initFramebuffers();
+    
+      // ---- palettes ----
+      const PALETTES = {
+        ink:   [[0.07,0.16,0.62],[0.28,0.10,0.78],[0.78,0.13,0.72],[0.98,0.32,0.42],[1.00,0.55,0.22],[0.16,0.34,0.95]],
+        ash:   [[0.18,0.22,0.34],[0.26,0.28,0.40],[0.34,0.30,0.44],[0.30,0.34,0.48],[0.22,0.28,0.42],[0.16,0.22,0.36]],
+        steel: [[0.10,0.30,0.66],[0.16,0.46,0.78],[0.22,0.60,0.82],[0.40,0.72,0.86],[0.20,0.40,0.74],[0.12,0.26,0.60]],
+        smoke: [[0.20,0.22,0.30],[0.30,0.30,0.38],[0.40,0.38,0.44],[0.34,0.32,0.40],[0.24,0.24,0.32],[0.18,0.20,0.28]],
+        neon:  [[0.95,0.10,0.62],[0.62,0.10,0.95],[0.10,0.85,0.95],[0.95,0.20,0.75],[0.40,0.20,1.00],[0.10,0.70,0.95]],
+        calm:  [[0.16,0.34,0.52],[0.20,0.46,0.56],[0.28,0.56,0.58],[0.34,0.52,0.56],[0.22,0.40,0.54],[0.16,0.32,0.50]],
+        ember: [[0.62,0.10,0.16],[0.86,0.22,0.14],[1.00,0.42,0.14],[1.00,0.60,0.20],[0.80,0.20,0.30],[0.55,0.10,0.20]],
+        gold:  [[0.78,0.54,0.25],[0.95,0.76,0.38],[0.58,0.40,0.18],[0.32,0.25,0.18],[0.86,0.66,0.32],[0.44,0.32,0.16]],
+      };
+      let paletteCur = PALETTES.gold.map(a=>a.slice());
+      let paletteTgt = PALETTES.gold.map(a=>a.slice());
+      let paletteT = Math.random()*paletteCur.length;
+      function paletteColor(t){ const n=paletteCur.length; const idx=((t%n)+n)%n; const i0=Math.floor(idx); const i1=(i0+1)%n; const f=idx-i0; const a=paletteCur[i0],b=paletteCur[i1]; return {r:a[0]+(b[0]-a[0])*f,g:a[1]+(b[1]-a[1])*f,b:a[2]+(b[2]-a[2])*f}; }
+      function generateColor(){ paletteT+=0.45+Math.random()*0.6; const c=paletteColor(paletteT); const s=0.16; return {r:c.r*s,g:c.g*s,b:c.b*s}; }
+    
+      // ---- config target tweening ----
+      const TWEEN_KEYS=['CURL','SPLAT_FORCE','BLOOM_INTENSITY','DENSITY_DISSIPATION'];
+      const target={}; TWEEN_KEYS.forEach(k=>target[k]=config[k]);
+      function tweenStep(){ const k=0.045; TWEEN_KEYS.forEach(key=>{ config[key]+=(target[key]-config[key])*k; }); for(let i=0;i<paletteCur.length;i++){ for(let j=0;j<3;j++){ paletteCur[i][j]+=(paletteTgt[i][j]-paletteCur[i][j])*k; } } }
+    
+      function pointerPrototype(){ return {id:-1,down:false,moved:false,texcoordX:0,texcoordY:0,prevTexcoordX:0,prevTexcoordY:0,deltaX:0,deltaY:0,color:{r:0.1,g:0.04,b:0.16}}; }
+      const pointers=[pointerPrototype()];
+      function updatePointerDown(p,id,x,y){ p.id=id; p.down=true; p.moved=false; p.texcoordX=x/canvas.width; p.texcoordY=1.0-y/canvas.height; p.prevTexcoordX=p.texcoordX; p.prevTexcoordY=p.texcoordY; p.deltaX=0; p.deltaY=0; p.color=generateColor(); }
+      function updatePointerMove(p,x,y){ p.prevTexcoordX=p.texcoordX; p.prevTexcoordY=p.texcoordY; p.texcoordX=x/canvas.width; p.texcoordY=1.0-y/canvas.height; p.deltaX=correctDeltaX(p.texcoordX-p.prevTexcoordX); p.deltaY=correctDeltaY(p.texcoordY-p.prevTexcoordY); p.moved=Math.abs(p.deltaX)>0||Math.abs(p.deltaY)>0; }
+      function correctDeltaX(d){ const ar=canvas.width/canvas.height; if(ar<1) d*=ar; return d; }
+      function correctDeltaY(d){ const ar=canvas.width/canvas.height; if(ar>1) d/=ar; return d; }
+      function correctRadius(r){ const ar=canvas.width/canvas.height; if(ar>1) r*=ar; return r; }
+    
+      function splat(x,y,dx,dy,color){ splatProgram.bind(); gl.uniform1i(splatProgram.uniforms.uTarget,velocity.read.attach(0)); gl.uniform1f(splatProgram.uniforms.aspectRatio,canvas.width/canvas.height); gl.uniform2f(splatProgram.uniforms.point,x,y); gl.uniform3f(splatProgram.uniforms.color,dx,dy,0.0); gl.uniform1f(splatProgram.uniforms.radius,correctRadius(config.SPLAT_RADIUS/100.0)); blit(velocity.write); velocity.swap(); gl.uniform1i(splatProgram.uniforms.uTarget,dye.read.attach(0)); gl.uniform3f(splatProgram.uniforms.color,color.r,color.g,color.b); blit(dye.write); dye.swap(); }
+      function splatPointer(p){ const dx=p.deltaX*config.SPLAT_FORCE; const dy=p.deltaY*config.SPLAT_FORCE; splat(p.texcoordX,p.texcoordY,dx,dy,p.color); }
+      function clickSplat(p){ const color=generateColor(); color.r*=9; color.g*=9; color.b*=9; const dx=10*(Math.random()-0.5); const dy=30*(Math.random()-0.5); splat(p.texcoordX,p.texcoordY,dx,dy,color); }
+      const splatStack=[];
+      function multipleSplats(n){ for(let i=0;i<n;i++){ const color=generateColor(); color.r*=10; color.g*=10; color.b*=10; const x=Math.random(),y=Math.random(); const dx=1000*(Math.random()-0.5); const dy=1000*(Math.random()-0.5); splat(x,y,dx,dy,color); } }
+    
+      function step(dt){ gl.disable(gl.BLEND);
+        curlProgram.bind(); gl.uniform2f(curlProgram.uniforms.texelSize,velocity.texelSizeX,velocity.texelSizeY); gl.uniform1i(curlProgram.uniforms.uVelocity,velocity.read.attach(0)); blit(curl);
+        vorticityProgram.bind(); gl.uniform2f(vorticityProgram.uniforms.texelSize,velocity.texelSizeX,velocity.texelSizeY); gl.uniform1i(vorticityProgram.uniforms.uVelocity,velocity.read.attach(0)); gl.uniform1i(vorticityProgram.uniforms.uCurl,curl.attach(1)); gl.uniform1f(vorticityProgram.uniforms.curl,config.CURL); gl.uniform1f(vorticityProgram.uniforms.dt,dt); blit(velocity.write); velocity.swap();
+        divergenceProgram.bind(); gl.uniform2f(divergenceProgram.uniforms.texelSize,velocity.texelSizeX,velocity.texelSizeY); gl.uniform1i(divergenceProgram.uniforms.uVelocity,velocity.read.attach(0)); blit(divergence);
+        clearProgram.bind(); gl.uniform1i(clearProgram.uniforms.uTexture,pressure.read.attach(0)); gl.uniform1f(clearProgram.uniforms.value,config.PRESSURE); blit(pressure.write); pressure.swap();
+        pressureProgram.bind(); gl.uniform2f(pressureProgram.uniforms.texelSize,velocity.texelSizeX,velocity.texelSizeY); gl.uniform1i(pressureProgram.uniforms.uDivergence,divergence.attach(0)); for(let i=0;i<config.PRESSURE_ITERATIONS;i++){ gl.uniform1i(pressureProgram.uniforms.uPressure,pressure.read.attach(1)); blit(pressure.write); pressure.swap(); }
+        gradienSubtractProgram.bind(); gl.uniform2f(gradienSubtractProgram.uniforms.texelSize,velocity.texelSizeX,velocity.texelSizeY); gl.uniform1i(gradienSubtractProgram.uniforms.uPressure,pressure.read.attach(0)); gl.uniform1i(gradienSubtractProgram.uniforms.uVelocity,velocity.read.attach(1)); blit(velocity.write); velocity.swap();
+        advectionProgram.bind(); gl.uniform2f(advectionProgram.uniforms.texelSize,velocity.texelSizeX,velocity.texelSizeY); if(!ext.supportLinearFiltering) gl.uniform2f(advectionProgram.uniforms.dyeTexelSize,velocity.texelSizeX,velocity.texelSizeY); gl.uniform1i(advectionProgram.uniforms.uVelocity,velocity.read.attach(0)); gl.uniform1i(advectionProgram.uniforms.uSource,velocity.read.attach(0)); gl.uniform1f(advectionProgram.uniforms.dt,dt); gl.uniform1f(advectionProgram.uniforms.dissipation,(1.0/config.VELOCITY_DISSIPATION-1.0)); blit(velocity.write); velocity.swap();
+        if(!ext.supportLinearFiltering) gl.uniform2f(advectionProgram.uniforms.dyeTexelSize,dye.texelSizeX,dye.texelSizeY); gl.uniform1i(advectionProgram.uniforms.uVelocity,velocity.read.attach(0)); gl.uniform1i(advectionProgram.uniforms.uSource,dye.read.attach(1)); gl.uniform1f(advectionProgram.uniforms.dissipation,(1.0/config.DENSITY_DISSIPATION-1.0)); blit(dye.write); dye.swap();
+      }
+      function render(target){ if(config.BLOOM) applyBloom(dye.read,bloom); gl.disable(gl.BLEND); drawDisplay(target); }
+      function drawDisplay(target){ const w=target==null?gl.drawingBufferWidth:target.width; const h=target==null?gl.drawingBufferHeight:target.height; displayMaterial.bind(); if(config.SHADING) gl.uniform2f(displayMaterial.uniforms.texelSize,1.0/w,1.0/h); gl.uniform1i(displayMaterial.uniforms.uTexture,dye.read.attach(0)); if(config.BLOOM) gl.uniform1i(displayMaterial.uniforms.uBloom,bloom.attach(1)); blit(target); }
+      function applyBloom(source,destination){ if(bloomFramebuffers.length<2) return; let last=destination; gl.disable(gl.BLEND); bloomPrefilterProgram.bind(); const knee=config.BLOOM_THRESHOLD*config.BLOOM_SOFT_KNEE+0.0001; gl.uniform3f(bloomPrefilterProgram.uniforms.curve,config.BLOOM_THRESHOLD-knee,knee*2,0.25/knee); gl.uniform1f(bloomPrefilterProgram.uniforms.threshold,config.BLOOM_THRESHOLD); gl.uniform1i(bloomPrefilterProgram.uniforms.uTexture,source.attach(0)); blit(last); bloomBlurProgram.bind(); for(let i=0;i<bloomFramebuffers.length;i++){ const dest=bloomFramebuffers[i]; gl.uniform2f(bloomBlurProgram.uniforms.texelSize,last.texelSizeX,last.texelSizeY); gl.uniform1i(bloomBlurProgram.uniforms.uTexture,last.attach(0)); blit(dest); last=dest; } gl.blendFunc(gl.ONE,gl.ONE); gl.enable(gl.BLEND); for(let i=bloomFramebuffers.length-2;i>=0;i--){ const baseTex=bloomFramebuffers[i]; gl.uniform2f(bloomBlurProgram.uniforms.texelSize,last.texelSizeX,last.texelSizeY); gl.uniform1i(bloomBlurProgram.uniforms.uTexture,last.attach(0)); gl.viewport(0,0,baseTex.width,baseTex.height); blit(baseTex); last=baseTex; } gl.disable(gl.BLEND); bloomFinalProgram.bind(); gl.uniform2f(bloomFinalProgram.uniforms.texelSize,last.texelSizeX,last.texelSizeY); gl.uniform1i(bloomFinalProgram.uniforms.uTexture,last.attach(0)); gl.uniform1f(bloomFinalProgram.uniforms.intensity,config.BLOOM_INTENSITY); blit(destination); }
+    
+      let lastUpdateTime=performance.now(); let colorUpdateTimer=0.0;
+      function calcDeltaTime(now){ let dt=(now-lastUpdateTime)/1000; if(!(dt>0)) dt=0; dt=Math.min(dt,0.033); lastUpdateTime=now; return dt; }
+      function resizeCanvas(){ const dpr=Math.min(window.devicePixelRatio||1,2); const w=Math.floor(canvas.clientWidth*dpr); const h=Math.floor(canvas.clientHeight*dpr); if(canvas.width!==w||canvas.height!==h){ canvas.width=w; canvas.height=h; return true; } return false; }
+      function updateColors(dt){ colorUpdateTimer+=dt*config.COLOR_UPDATE_SPEED; if(colorUpdateTimer>=1){ colorUpdateTimer%=1; pointers.forEach(p=>p.color=generateColor()); } }
+      function applyInputs(){ if(splatStack.length>0) multipleSplats(splatStack.pop()); pointers.forEach(p=>{ if(p.moved){ p.moved=false; splatPointer(p); } }); }
+    
+      let autoT=Math.random()*1000; let autoAccum=0; let autoPrev=autoT;
+      const AUTO_PAINT_INTERVAL=0.05; const AUTO_DYE_SCALE=0.85;
+      const AUTO_EMITTERS=[{ax:0.40,ay:0.34,fx:0.43,fy:0.31,phx:0.0,phy:1.3},{ax:0.36,ay:0.30,fx:0.27,fy:0.52,phx:2.1,phy:0.4},{ax:0.30,ay:0.38,fx:0.61,fy:0.23,phx:4.0,phy:2.7}];
+      function autoPos(e,t){ return {x:0.5+e.ax*Math.sin(t*e.fx+e.phx)*Math.cos(t*e.fy*0.6+e.phy),y:0.5+e.ay*Math.sin(t*e.fy+e.phy)}; }
+      function autoPaintStep(dt){ autoT+=dt*0.62; autoAccum+=dt; if(autoAccum<AUTO_PAINT_INTERVAL) return; const span=autoAccum; autoAccum=0; const inv=span>0?(1.0/span):0.0; for(const e of AUTO_EMITTERS){ const p=autoPos(e,autoT),pp=autoPos(e,autoPrev); const dx=(p.x-pp.x)*inv*config.SPLAT_FORCE*0.30; const dy=(p.y-pp.y)*inv*config.SPLAT_FORCE*0.30; const color=generateColor(); color.r*=AUTO_DYE_SCALE; color.g*=AUTO_DYE_SCALE; color.b*=AUTO_DYE_SCALE; splat(p.x,p.y,dx,dy,color); } autoPrev=autoT; }
+    
+      let idleTimer=0;
+      function frame(now){ const dt=calcDeltaTime(now); if(resizeCanvas()) initFramebuffers(); tweenStep(); updateColors(dt); applyInputs(); if(!pointers[0].down) idleTimer+=dt; else idleTimer=0; const doAuto=config.AUTO_PAINT||(idleTimer>5&&!reduceMotion)||reduceMotion; if(!config.PAUSED){ if(doAuto) autoPaintStep(dt); step(dt); } render(null); }
+      function update(now){ frame(typeof now==='number'?now:performance.now()); requestAnimationFrame(update); }
+    
+      // ---- global hover painting (alive everywhere) ----
+      function clientToCanvas(cx,cy){ const r=canvas.getBoundingClientRect(); return {x:(cx-r.left)*(canvas.width/r.width),y:(cy-r.top)*(canvas.height/r.height)}; }
+      let lastMove=0;
+      window.addEventListener('mousemove',e=>{ const now=performance.now(); if(now-lastMove<16) {} const pt=pointers[0]; const p=clientToCanvas(e.clientX,e.clientY); if(!pt.down){ pt.prevTexcoordX=pt.texcoordX||(p.x/canvas.width); pt.prevTexcoordY=pt.texcoordY||(1-p.y/canvas.height); } updatePointerMove(pt,p.x,p.y); if(!pt.down && pt.moved){ const dx=pt.deltaX*config.SPLAT_FORCE*0.42; const dy=pt.deltaY*config.SPLAT_FORCE*0.42; const c=pt.color; splat(pt.texcoordX,pt.texcoordY,dx,dy,{r:c.r*0.45,g:c.g*0.45,b:c.b*0.45}); pt.moved=false; } lastMove=now; });
+      window.addEventListener('mousedown',e=>{ const p=clientToCanvas(e.clientX,e.clientY); updatePointerDown(pointers[0],-1,p.x,p.y); clickSplat(pointers[0]); });
+      window.addEventListener('mouseup',()=>pointers[0].down=false);
+      window.addEventListener('touchstart',e=>{ const t=e.targetTouches[0]; if(!t) return; const p=clientToCanvas(t.clientX,t.clientY); updatePointerDown(pointers[0],-1,p.x,p.y); clickSplat(pointers[0]); },{passive:true});
+      window.addEventListener('touchmove',e=>{ const t=e.targetTouches[0]; if(!t) return; const p=clientToCanvas(t.clientX,t.clientY); updatePointerMove(pointers[0],p.x,p.y); },{passive:true});
+      window.addEventListener('touchend',()=>pointers[0].down=false);
+      document.addEventListener('visibilitychange',()=>{ if(!document.hidden) lastUpdateTime=performance.now(); });
+    
+      function drawFallback(){ const ctx=canvas.getContext('2d'); if(!ctx) return; function fit(){canvas.width=innerWidth;canvas.height=innerHeight;} fit(); window.addEventListener('resize',fit); const g=ctx.createRadialGradient(innerWidth*0.5,innerHeight*0.45,40,innerWidth*0.5,innerHeight*0.45,Math.max(innerWidth,innerHeight)*0.7); g.addColorStop(0,'#8a6a2f'); g.addColorStop(0.5,'#2a2216'); g.addColorStop(1,'#030303'); ctx.fillStyle=g; ctx.fillRect(0,0,innerWidth,innerHeight); }
+    
+      resizeCanvas(); initFramebuffers();
+      function seed(){ const bursts=reduceMotion?14:11; for(let i=0;i<bursts;i++){ const color=generateColor(); color.r*=8; color.g*=8; color.b*=8; const ang=(i/bursts)*Math.PI*2+Math.random()*0.6; const rad=0.10+(i/bursts)*0.30; const x=0.5+Math.cos(ang)*rad; const y=0.5+Math.sin(ang)*rad*0.9; const dx=-Math.sin(ang)*900+(Math.random()-0.5)*300; const dy=Math.cos(ang)*900+(Math.random()-0.5)*300; splat(x,y,dx,dy,color); } }
+      seed();
+      requestAnimationFrame(update);
+    
+      // ---- public API ----
+      window.INK = {
+        config, target,
+        toState(obj){
+          if(!obj) return;
+          if(typeof obj==='string') obj={palette:obj};
+          TWEEN_KEYS.forEach(k=>{ if(k in obj) target[k]=obj[k]; });
+          if(obj.palette && PALETTES[obj.palette]) paletteTgt=PALETTES[obj.palette].map(a=>a.slice());
+          if(obj.VELOCITY_DISSIPATION!=null) config.VELOCITY_DISSIPATION=obj.VELOCITY_DISSIPATION;
+        },
+        setNow(k,v){ if(k in config) config[k]=v; if(TWEEN_KEYS.includes(k)) target[k]=v; },
+        burst(n=10){ splatStack.push(n); },
+        // inject a directional splat at normalized coords (0..1, y down)
+        splatNorm(x,y,dx,dy,strength=1){ const color=generateColor(); color.r*=8*strength; color.g*=8*strength; color.b*=8*strength; splat(x,1.0-y,dx,dy,color); },
+        palettes:Object.keys(PALETTES),
+        isWebGL2:ext.isWebGL2, reduceMotion
+      };
+    })();
+    </script>
+
+    <script>
+
+        // Opening loader fade-out
+        window.addEventListener('load', () => {
+            const loader = document.getElementById('opening-loader');
+            if (loader) {
+                window.setTimeout(() => loader.classList.add('loader-hidden'), 700);
+            }
+        });
+
+        // Subtle navbar background change on scroll for modern luxury feel
+        window.addEventListener('scroll', () => {
+            const nav = document.getElementById('navbar');
+            if (window.scrollY > 50) {
+                nav.classList.add('py-4', 'bg-[#030303]/95');
+                nav.classList.remove('py-6', 'bg-[#030303]/80');
+            } else {
+                nav.classList.add('py-6', 'bg-[#030303]/80');
+                nav.classList.remove('py-4', 'bg-[#030303]/95');
+            }
+        });
+
+        // AI 设计 horizontal slider: 5 items in one row, 4 visible on desktop.
+        // Supports arrow buttons, mouse/touch drag, and laptop trackpad horizontal swipe.
+        const aiSliderViewport = document.getElementById('ai-slider-viewport');
+        const aiSliderTrack = document.getElementById('ai-slider-track');
+        const aiSliderPrev = document.getElementById('ai-slider-prev');
+        const aiSliderNext = document.getElementById('ai-slider-next');
+        let aiSliderIndex = 0;
+        let aiDragStartX = 0;
+        let aiDragging = false;
+        let aiDragged = false;
+        let aiWheelDelta = 0;
+        let aiWheelLocked = false;
+
+        function getAIVisibleCount() {
+            if (window.innerWidth >= 1024) return 4;
+            if (window.innerWidth >= 640) return 2;
+            return 1;
+        }
+
+        function getAISliderMaxIndex() {
+            if (!aiSliderTrack) return 0;
+            return Math.max(0, aiSliderTrack.children.length - getAIVisibleCount());
+        }
+
+        function getAIStepWidth() {
+            if (!aiSliderTrack) return 0;
+            const firstCard = aiSliderTrack.querySelector('.ai-slider-card');
+            if (!firstCard) return 0;
+            const gap = parseFloat(window.getComputedStyle(aiSliderTrack).gap) || 0;
+            return firstCard.getBoundingClientRect().width + gap;
+        }
+
+        function updateAISlider() {
+            if (!aiSliderTrack || !aiSliderPrev || !aiSliderNext) return;
+            const maxIndex = getAISliderMaxIndex();
+            aiSliderIndex = Math.min(Math.max(aiSliderIndex, 0), maxIndex);
+            aiSliderTrack.style.transform = `translateX(-${aiSliderIndex * getAIStepWidth()}px)`;
+            aiSliderPrev.disabled = aiSliderIndex === 0;
+            aiSliderNext.disabled = aiSliderIndex === maxIndex;
+        }
+
+        function moveAISlider(direction) {
+            const maxIndex = getAISliderMaxIndex();
+            aiSliderIndex = Math.min(Math.max(aiSliderIndex + direction, 0), maxIndex);
+            updateAISlider();
+        }
+
+        if (aiSliderPrev && aiSliderNext) {
+            aiSliderPrev.addEventListener('click', () => moveAISlider(-1));
+            aiSliderNext.addEventListener('click', () => moveAISlider(1));
+        }
+
+        if (aiSliderViewport) {
+            aiSliderViewport.addEventListener('pointerdown', (event) => {
+                aiDragging = true;
+                aiDragged = false;
+                aiDragStartX = event.clientX;
+                aiSliderViewport.classList.add('is-dragging');
+                aiSliderViewport.setPointerCapture(event.pointerId);
+            });
+
+            aiSliderViewport.addEventListener('pointerup', (event) => {
+                if (!aiDragging) return;
+                const dragDistance = event.clientX - aiDragStartX;
+                if (Math.abs(dragDistance) > 8) aiDragged = true;
+                if (dragDistance < -60) moveAISlider(1);
+                if (dragDistance > 60) moveAISlider(-1);
+                aiDragging = false;
+                aiSliderViewport.classList.remove('is-dragging');
+            });
+
+            aiSliderViewport.addEventListener('pointercancel', () => {
+                aiDragging = false;
+                aiSliderViewport.classList.remove('is-dragging');
+            });
+
+            aiSliderViewport.addEventListener('click', (event) => {
+                if (!aiDragged) return;
+                event.preventDefault();
+                event.stopPropagation();
+                aiDragged = false;
+            }, true);
+
+            aiSliderViewport.addEventListener('wheel', (event) => {
+                const absX = Math.abs(event.deltaX);
+                const absY = Math.abs(event.deltaY);
+                if (absX <= absY || absX < 8) return;
+
+                const maxIndex = getAISliderMaxIndex();
+                const direction = event.deltaX > 0 ? 1 : -1;
+                const isAtStart = aiSliderIndex === 0 && direction < 0;
+                const isAtEnd = aiSliderIndex === maxIndex && direction > 0;
+                if (isAtStart || isAtEnd) return;
+
+                event.preventDefault();
+                aiWheelDelta += event.deltaX;
+                if (aiWheelLocked || Math.abs(aiWheelDelta) < 40) return;
+
+                moveAISlider(aiWheelDelta > 0 ? 1 : -1);
+                aiWheelDelta = 0;
+                aiWheelLocked = true;
+                window.setTimeout(() => {
+                    aiWheelLocked = false;
+                }, 500);
+            }, { passive: false });
+        }
+
+        window.addEventListener('resize', updateAISlider);
+        window.addEventListener('load', updateAISlider);
+        updateAISlider();
+
+    </script>
+
+</body>
+</html>
